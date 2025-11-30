@@ -1,0 +1,9 @@
+names:
+- coin
+- sticky
+- doraemon
+- nut
+nc: 4
+path: D:\github\smart-canteen\backend\data\dataset
+train: train/images
+val: val/images

@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "url": "https://example.com/models/model_1.0.0.zip",
+  "sha256": "placeholder_checksum",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "description": "Initial shape-based detection model"
+}
