@@ -18,6 +18,14 @@ from ultralytics import YOLO
 logger = logging.getLogger(__name__)
 
 
+def get_center_square_bbox(width: int, height: int, ratio: float = 0.8) -> List[float]:
+    """Return a square bbox centered in the frame covering `ratio` of the shorter side."""
+    side = min(width, height) * ratio
+    x1 = (width - side) / 2
+    y1 = (height - side) / 2
+    return [x1, y1, x1 + side, y1 + side]
+
+
 class AnnotationManager:
     """Manages dataset annotation and storage"""
     
@@ -55,6 +63,7 @@ class AnnotationManager:
         
         # Get frame dimensions
         h, w = frame.shape[:2]
+        default_square_bbox = get_center_square_bbox(w, h)
         
         # Create YOLO format label
         # YOLO format: class_id center_x center_y width height (normalized 0-1)
@@ -111,11 +120,12 @@ class AnnotationManager:
                     
             except Exception as e:
                 # Fallback to conservative full-frame bbox
-                logger.warning(f"Auto-detection failed: {e}, using 70% center bbox")
-                center_x = 0.5
-                center_y = 0.5
-                bbox_width = 0.7
-                bbox_height = 0.7
+                logger.warning(f"Auto-detection failed: {e}, using centered square bbox")
+                x1, y1, x2, y2 = default_square_bbox
+                center_x = ((x1 + x2) / 2) / w
+                center_y = ((y1 + y2) / 2) / h
+                bbox_width = (x2 - x1) / w
+                bbox_height = (y2 - y1) / h
         
         label_content = f"{class_index} {center_x} {center_y} {bbox_width} {bbox_height}\n"
         

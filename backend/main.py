@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from annotation import AnnotationManager, TrainingManager
+from annotation import AnnotationManager, TrainingManager, get_center_square_bbox
 
 # Setup logging
 logging.basicConfig(
@@ -655,6 +655,10 @@ async def capture_annotation(request: CaptureRequest):
     # Try to get bbox from request or detect automatically
     bbox = request.bbox
     
+    # Prepare default centered square bbox (80% of min dimension)
+    h, w = frame.shape[:2]
+    default_bbox = get_center_square_bbox(w, h)
+    
     # If no bbox provided, try to get from YOLOv8n assist model
     if bbox is None and assist_model:
         try:
@@ -669,6 +673,11 @@ async def capture_annotation(request: CaptureRequest):
                     logger.info(f"Using YOLOv8n detected bbox for {request.label}: {bbox}")
         except Exception as e:
             logger.warning(f"Could not get YOLOv8n detection bbox: {e}")
+    
+    # Final fallback: centered square bbox to keep annotations consistent
+    if bbox is None:
+        bbox = default_bbox
+        logger.info(f"Using default centered square bbox for {request.label}: {bbox}")
     
     # Save annotation with bbox
     filename = annotation_manager.capture_sample(frame, request.label, class_index, bbox)
@@ -708,6 +717,13 @@ async def get_annotation_preview():
     
     # Get frame dimensions
     h, w = frame.shape[:2]
+    default_detection = {
+        "class_id": -1,
+        "class_name": "center_focus",
+        "confidence": 1.0,
+        "bbox": [float(x) for x in get_center_square_bbox(w, h)],
+        "is_default": True
+    }
     
     # Use YOLOv8n pretrained model for stable object detection
     if assist_model:
@@ -740,22 +756,22 @@ async def get_annotation_preview():
                 "success": True,
                 "frame_width": w,
                 "frame_height": h,
-                "detections": boxes
+                "detections": boxes if len(boxes) > 0 else [default_detection]
             })
         except Exception as e:
             logger.error(f"Preview detection error: {e}")
             return JSONResponse(content={
-                "success": False,
+                "success": True,
                 "frame_width": w,
                 "frame_height": h,
-                "detections": []
+                "detections": [default_detection]
             })
     
     return JSONResponse(content={
-        "success": False,
+        "success": True,
         "frame_width": w,
         "frame_height": h,
-        "detections": []
+        "detections": [default_detection]
     })
 
 

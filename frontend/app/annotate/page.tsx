@@ -17,6 +17,7 @@ interface Detection {
   class_name: string;
   confidence: number;
   bbox: number[]; // [x1, y1, x2, y2]
+  is_default?: boolean;
 }
 
 interface PreviewData {
@@ -57,6 +58,14 @@ export default function AnnotationPage() {
     fetcher,
     { refreshInterval: 300, revalidateOnFocus: false }
   );
+
+  const buildCenterSquareFromPreview = () => {
+    if (!previewData) return null;
+    const side = Math.min(previewData.frame_width, previewData.frame_height) * 0.8;
+    const x1 = (previewData.frame_width - side) / 2;
+    const y1 = (previewData.frame_height - side) / 2;
+    return [x1, y1, x1 + side, y1 + side];
+  };
 
   useEffect(() => {
     if (classesData) {
@@ -144,11 +153,15 @@ export default function AnnotationPage() {
       const height = scaledY2 - scaledY1;
 
       // Choose color based on confidence
-      let color = "rgba(255, 0, 0, 0.6)"; // Red for very low confidence
-      if (det.confidence > 0.5) {
-        color = "rgba(0, 255, 0, 0.8)"; // Green for high confidence
-      } else if (det.confidence > 0.25) {
-        color = "rgba(255, 255, 0, 0.7)"; // Yellow for medium confidence
+      const isDefault = det.is_default;
+      let color = "rgba(0, 128, 255, 0.8)"; // Blue for default/fallback box
+      if (!isDefault) {
+        color = "rgba(255, 0, 0, 0.6)"; // Red for very low confidence
+        if (det.confidence > 0.5) {
+          color = "rgba(0, 255, 0, 0.8)"; // Green for high confidence
+        } else if (det.confidence > 0.25) {
+          color = "rgba(255, 255, 0, 0.7)"; // Yellow for medium confidence
+        }
       }
 
       // Draw bounding box
@@ -157,7 +170,9 @@ export default function AnnotationPage() {
       ctx.strokeRect(scaledX1, scaledY1, width, height);
 
       // Draw label background
-      const label = `${det.class_name} ${(det.confidence * 100).toFixed(1)}%`;
+      const label = det.is_default
+        ? "默认中心框"
+        : `${det.class_name} ${(det.confidence * 100).toFixed(1)}%`;
       ctx.font = "14px Arial";
       const textMetrics = ctx.measureText(label);
       const textHeight = 20;
@@ -198,6 +213,19 @@ export default function AnnotationPage() {
           bbox = previewData.detections[0].bbox;
           setMessage("📸 使用第一个检测框标注...");
         }
+      }
+
+      // If still no bbox, fallback to centered square to keep annotations consistent
+      if (!bbox) {
+        const fallbackBox = buildCenterSquareFromPreview();
+        if (fallbackBox) {
+          bbox = fallbackBox;
+          setMessage("📸 未检测到物体，使用中心默认框标注...");
+        }
+      }
+
+      if (!bbox) {
+        setMessage("📸 未获取检测框，将使用后端默认中心框标注...");
       }
 
       const response = await axios.post(`${API_BASE}/api/annotation/capture`, {
@@ -401,16 +429,22 @@ export default function AnnotationPage() {
                   <li>点击"拍照标注"保存样本</li>
                   <li>建议每个类别采集 20+ 张不同角度的照片</li>
                 </ol>
-                {previewData && previewData.detections.length > 0 && showDetectionBoxes && (
+                {previewData && showDetectionBoxes && (
                   <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
-                    <p className="font-semibold text-blue-800">
-                      🎯 当前检测到 {previewData.detections.length} 个物体
-                    </p>
-                    {previewData.detections.slice(0, 3).map((det, idx) => (
-                      <p key={idx} className="text-blue-700">
-                        • {det.class_name}: {(det.confidence * 100).toFixed(1)}%
-                      </p>
-                    ))}
+                    {previewData.detections.some((det) => det.is_default) ? (
+                      <p className="font-semibold text-blue-800">🎯 未检测到物体，已显示中心默认框</p>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-blue-800">
+                          🎯 当前检测到 {previewData.detections.length} 个物体
+                        </p>
+                        {previewData.detections.slice(0, 3).map((det, idx) => (
+                          <p key={idx} className="text-blue-700">
+                            • {det.class_name}: {(det.confidence * 100).toFixed(1)}%
+                          </p>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
