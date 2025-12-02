@@ -45,6 +45,10 @@ smart-canteen/
 └── docs/                # Documentation
 ```
 
+![](docs/home.png)
+![](docs/annotate.png)
+
+
 ## 🚀 Quick Start
 
 ### Prerequisites
